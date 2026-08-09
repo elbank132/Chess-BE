@@ -14,7 +14,7 @@ sio = socketio.AsyncServer(
 
 class EventArguments(StrEnum):
     MOVE = 'move'
-    GAME_ID = 'game_id'
+    GAME_ID = 'gameId'
 
 
 app = socketio.ASGIApp(sio)
@@ -32,7 +32,7 @@ async def move(sid, data):
     fen = game_session.fen
     new_fen = MoveService.get_updated_fen(move, fen) 
     game_session.update_state(new_fen)
-    sio.emit('game_state_update', game_session.get_state(), room=game_id)
+    await sio.emit('game_state_update', game_session.get_state(), room=game_id)
     
 @sio.event
 async def disconnect(sid):
@@ -43,7 +43,7 @@ async def on_match_found(white_player_id, black_player_id):
     new_game_id = game_session.game_id
     await sio.enter_room(white_player_id, new_game_id)
     await sio.enter_room(black_player_id, new_game_id)
-    await sio.emit('match_found', game_session.get_state(), room = new_game_id)
+    await sio.emit('match_found', game_session.get_match_found_message(), room = new_game_id)
     print(f"Match found: {white_player_id} vs {black_player_id} in game {new_game_id}")
 
 

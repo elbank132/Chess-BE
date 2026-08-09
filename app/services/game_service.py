@@ -2,6 +2,8 @@ from typing import Dict, Optional, Tuple
 from enum import Enum
 import uuid
 
+INITIAL_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0"
+
 class Status(Enum):
     ACTIVE = 1
     CHECKMATE = 2
@@ -17,7 +19,7 @@ class GameSession:
         self.white_player_id = white_player_id
         self.black_player_id = black_player_id
         self.status = Status.ACTIVE
-        self.fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0"  # Placeholder for the FEN string representing the board state
+        self.fen = INITIAL_FEN
 
     def update_state(self, new_fen: str):
         self.fen = new_fen
@@ -26,9 +28,17 @@ class GameSession:
     def get_state(self) -> dict:
         """Returns the current state to send to the frontend."""
         return {
-            "game_id": self.game_id,
             "fen": self.fen,
-            "status": self.status
+            "status": self.status.value
+        }
+
+    def get_match_found_message(self) -> dict:
+        """Returns a game start message with color per player"""
+        return {
+            "fen": INITIAL_FEN,
+            "gameId": self.game_id,
+            "whitePlayerId": self.white_player_id,
+            "blackPlayerId": self.black_player_id
         }
 
     def update_status(self):
