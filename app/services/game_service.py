@@ -28,7 +28,7 @@ class GameSession:
         return {
             "game_id": self.game_id,
             "fen": self.fen,
-            "status": self.status
+            "status": self.status.value
         }
 
     def update_status(self):
