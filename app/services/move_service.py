@@ -99,39 +99,56 @@ class MoveService:
 
     @staticmethod
     def is_rook_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
-        if start[0] != end[0] and start[1] != end[1]: #straight line check
+        if start == end:
+            return False
+        if start[0] != end[0] and start[1] != end[1]:  # straight line check
             return False 
         # Check if path is clear
         if start[0] == end[0]:  # Horizontal move
-            if end[1] > start[1]:
-                step = 1
-            else:
-                step = -1
+            step = 1 if end[1] > start[1] else -1
             for col in range(start[1] + step, end[1], step):
                 if board[start[0]][col] != '.':
                     return False
-                
         else:  # Vertical move
-            if end[0] > start[0]:
-                step = 1
-            else:
-                step = -1
+            step = 1 if end[0] > start[0] else -1
             for row in range(start[0] + step, end[0], step):
                 if board[row][start[1]] != '.':
                     return False
-        
+        return True
 
     @staticmethod
     def is_knight_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
-        return True  # Placeholder for actual knight move validation logic 
-
+        row_diff = abs(start[0] - end[0])
+        col_diff = abs(start[1] - end[1])
+        if row_diff == 2 and col_diff == 1:
+            return True
+        if row_diff == 1 and col_diff == 2:
+            return True
+        return False
+    
     @staticmethod
     def is_bishop_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
-        return True  # Placeholder for actual bishop move validation logic
+        if start == end:
+            return False
+        if abs(start[0] - end[0]) != abs(start[1] - end[1]):  # Diagonal move check
+            return False
+        row_step = 1 if end[0] > start[0] else -1
+        col_step = 1 if end[1] > start[1] else -1
+        row, col = start[0] + row_step, start[1] + col_step
+        while (row, col) != end:
+            if board[row][col] != '.':
+                return False
+            row += row_step
+            col += col_step
+        return True
+        
 
     @staticmethod
     def is_queen_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
-        return True  # Placeholder for actual queen move validation logic
+        return (
+            MoveService.is_rook_move_valid(piece, start, end, board)
+            or MoveService.is_bishop_move_valid(piece, start, end, board)
+        )
 
     @staticmethod
     def is_king_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
