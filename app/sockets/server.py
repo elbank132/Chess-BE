@@ -19,6 +19,19 @@ class EventArguments(StrEnum):
 
 app = socketio.ASGIApp(sio)
 
+async def on_match_found(white_player_id, black_player_id):
+    game_session = game_service.create_game(white_player_id, black_player_id)
+    new_game_id = str(game_session.game_id)
+    
+    await sio.enter_room(white_player_id, new_game_id)
+    await sio.enter_room(black_player_id, new_game_id)
+    await sio.emit('match_found', game_session.get_match_found_message(), room = new_game_id)
+    print(f"Match found: {white_player_id} vs {black_player_id} in game {new_game_id}")
+
+
+matchmaker = Matchmaker(on_match_found)
+game_service = GameService()
+
 @sio.event
 async def connect(sid, environ):
     print(f"🟢 Client connected: {sid}")
@@ -26,33 +39,28 @@ async def connect(sid, environ):
 
 @sio.event
 async def move(sid, data):
-    game_id = data.get(EventArguments.GAME_ID)
-    move = data.get(EventArguments.MOVE)
+    game_id = str(data.get(EventArguments.GAME_ID))
+    move_str = data.get(EventArguments.MOVE)
+    
     game_session = game_service.get_game(game_id)
+    
+    if not game_session:
+        return
+        
     fen = game_session.fen
-    new_fen = MoveService.get_updated_fen(move, fen) 
-    game_session.update_state(new_fen)
-    await sio.emit('game_state_update', game_session.get_state(), room=game_id)
+    
+    try:
+        new_fen = MoveService.get_updated_fen(move_str, fen) 
+        game_session.update_state(new_fen)
+        await sio.emit('game_state_update', game_session.get_state(), room=game_id)
+        
+    except ValueError as e:
+        await sio.emit('invalid_move', {'message': str(e)}, to=sid)
     
 @sio.event
 async def disconnect(sid):
     print(f"🔴 Client disconnected: {sid}")
 
-async def on_match_found(white_player_id, black_player_id):
-    game_session = game_service.create_game(white_player_id, black_player_id)
-    new_game_id = game_session.game_id
-    await sio.enter_room(white_player_id, new_game_id)
-    await sio.enter_room(black_player_id, new_game_id)
-    await sio.emit('match_found', game_session.get_match_found_message(), room = new_game_id)
-    print(f"Match found: {white_player_id} vs {black_player_id} in game {new_game_id}")
-
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
-
-matchmaker = Matchmaker(on_match_found)
-game_service = GameService()
-
-
-
-

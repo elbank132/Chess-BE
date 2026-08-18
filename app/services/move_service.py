@@ -2,17 +2,124 @@ class MoveService:
 
     @staticmethod
     def get_updated_fen(move: str, fen: str) -> str:
-        # Placeholder for actual move validation logic
         if not MoveService.is_valid_move(move, fen):
             raise ValueError("Invalid move")
-        return fen  # Placeholder for actual updated FEN
-
-    @staticmethod
-    def is_valid_move(move: str , fen: str) -> bool:
+            
         board = MoveService.turn_fen_to_board(fen)
         move_start, move_end = MoveService.parse_move(move)
+        piece = board[move_start[0]][move_start[1]]
+        
         fen_parts = fen.split(' ')
         turn = fen_parts[1]
+        castling = fen_parts[2] if len(fen_parts) > 2 else "-"
+        halfmove = int(fen_parts[4]) if len(fen_parts) > 4 else 0
+        fullmove = int(fen_parts[5]) if len(fen_parts) > 5 else 1
+        
+        is_capture = MoveService.execute_move_on_board(board, move, move_start, move_end, turn)
+        is_pawn_move = piece.lower() == 'p'
+        
+        new_board_fen = MoveService.turn_board_to_fen(board)
+        new_castling = MoveService.update_castling_rights(castling, piece, move_start, move_end)
+        new_ep_target = MoveService.get_new_en_passant_target(piece, move_start, move_end)
+        new_turn, new_halfmove, new_fullmove = MoveService.update_clocks(turn, halfmove, fullmove, is_pawn_move, is_capture)
+        
+        return f"{new_board_fen} {new_turn} {new_castling} {new_ep_target} {new_halfmove} {new_fullmove}"
+
+    
+
+    @staticmethod
+    def execute_move_on_board(board: list[list[str]], move: str, move_start: tuple[int, int], move_end: tuple[int, int], turn: str) -> bool:
+        start_row, start_col = move_start
+        end_row, end_col = move_end
+        piece = board[start_row][start_col]
+        target_piece = board[end_row][end_col]
+        is_capture = target_piece != '.'
+        is_pawn_move = piece.lower() == 'p'
+        
+        if is_pawn_move and target_piece == '.' and start_col != end_col:
+            board[start_row][end_col] = '.' 
+            is_capture = True
+        elif piece.lower() == 'k' and abs(start_col - end_col) == 2:
+            if end_col == 6:  
+                board[end_row][5] = board[end_row][7]
+                board[end_row][7] = '.'
+            elif end_col == 2: 
+                board[end_row][3] = board[end_row][0]
+                board[end_row][0] = '.'
+        elif is_pawn_move and len(move) == 5:
+            promo_char = move[4]
+            piece = promo_char.upper() if turn == 'w' else promo_char.lower()
+            
+        board[end_row][end_col] = piece
+        board[start_row][start_col] = '.'
+        
+        return is_capture
+
+
+    @staticmethod
+    def turn_board_to_fen(board: list[list[str]]) -> str:
+        fen_rows = []
+        for row in board:
+            empty_count = 0
+            fen_row = ""
+            for char in row:
+                if char == '.':
+                    empty_count += 1
+                else:
+                    if empty_count > 0:
+                        fen_row += str(empty_count)
+                        empty_count = 0
+                    fen_row += char
+            if empty_count > 0:
+                fen_row += str(empty_count)
+            fen_rows.append(fen_row)
+        return "/".join(fen_rows)
+
+
+    @staticmethod
+    def update_castling_rights(current_castling: str, piece: str, move_start: tuple[int, int], move_end: tuple[int, int]) -> str:
+        if current_castling == '-':
+            return '-'
+            
+        new_castling = current_castling
+        
+        if piece == 'K': new_castling = new_castling.replace('K', '').replace('Q', '')
+        elif piece == 'k': new_castling = new_castling.replace('k', '').replace('q', '')
+        
+        rook_starts = {(7, 7): 'K', (7, 0): 'Q', (0, 7): 'k', (0, 0): 'q'}
+        if move_start in rook_starts:
+            new_castling = new_castling.replace(rook_starts[move_start], '')
+        if move_end in rook_starts:
+            new_castling = new_castling.replace(rook_starts[move_end], '')
+            
+        return new_castling if new_castling else '-'
+
+
+    @staticmethod
+    def get_new_en_passant_target(piece: str, move_start: tuple[int, int], move_end: tuple[int, int]) -> str:
+        if piece.lower() == 'p' and abs(move_start[0] - move_end[0]) == 2:
+            target_row = (move_start[0] + move_end[0]) // 2
+            target_col_char = chr(move_start[1] + ord('a'))
+            target_row_char = str(8 - target_row)
+            return f"{target_col_char}{target_row_char}"
+        return '-'
+
+
+    @staticmethod
+    def update_clocks(turn: str, halfmove: int, fullmove: int, is_pawn_move: bool, is_capture: bool) -> tuple[str, int, int]:
+        new_halfmove = 0 if is_pawn_move or is_capture else halfmove + 1
+        new_fullmove = fullmove + 1 if turn == 'b' else fullmove
+        new_turn = 'b' if turn == 'w' else 'w'
+        return new_turn, new_halfmove, new_fullmove
+
+    @staticmethod
+    def is_valid_move(move: str, fen: str) -> bool:
+        board = MoveService.turn_fen_to_board(fen)
+        move_start, move_end = MoveService.parse_move(move)
+        
+        fen_parts = fen.split(' ')
+        turn = fen_parts[1]
+        castling_rights = fen_parts[2] if len(fen_parts) > 2 else "-"
         en_passant_target = fen_parts[3] if len(fen_parts) > 3 else "-"
 
         if not MoveService.check_starting_square(board, move_start, turn):
@@ -20,16 +127,18 @@ class MoveService:
         if not MoveService.check_target_square(board, move_end, turn):
             return False
 
-        
-        
-
         piece_char = board[move_start[0]][move_start[1]]
-        if not MoveService.is_piece_move_valid(piece_char, move_start, move_end, board, en_passant_target):
+
+        if not MoveService.is_piece_move_valid(piece_char, move_start, move_end, board, en_passant_target, castling_rights):
             return False
 
-
+        if not MoveService.is_promotion_valid(move, piece_char, move_end):
+            return False
+            
+        if not MoveService.is_king_safe_after_move(board, move_start, move_end, piece_char, turn):
+            return False
         
-        return True  # Placeholder for actual move validation logic
+        return True
     
     @staticmethod
     def turn_fen_to_board(fen: str) -> list[list[str]]: #maybe board should be a class instead of static method
@@ -89,7 +198,7 @@ class MoveService:
 
 
     @staticmethod
-    def is_piece_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]], en_passant_fen: str = "-") -> bool:
+    def is_piece_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]], en_passant_fen: str = "-", castling_fen: str = "-") -> bool:
         if piece.lower() == 'p':
             return MoveService.is_pawn_move_valid(piece, start, end, board, en_passant_fen)
         if piece.lower() == 'r':
@@ -101,7 +210,7 @@ class MoveService:
         if piece.lower() == 'q':
             return MoveService.is_queen_move_valid(piece, start, end, board)
         if piece.lower() == 'k':
-            return MoveService.is_king_move_valid(piece, start, end, board)
+            return MoveService.is_king_move_valid(piece, start, end, board, castling_fen)
         raise ValueError("Unknown piece type")
     
     @staticmethod
@@ -188,5 +297,124 @@ class MoveService:
         )
 
     @staticmethod
-    def is_king_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]]) -> bool:
-        return True  # Placeholder for actual king move validation logic 
+    def is_king_move_valid(piece: str, start: tuple[int, int], end: tuple[int, int], board: list[list[str]], castling_fen: str) -> bool:
+        row_diff = abs(start[0] - end[0])
+        col_diff = abs(start[1] - end[1])
+        
+        if row_diff <= 1 and col_diff <= 1:
+            return True
+            
+        if row_diff == 0 and col_diff == 2:
+            
+
+            if piece == 'K' and start == (7, 4):
+                if end[1] == 6 and 'K' in castling_fen: 
+                    return board[7][5] == '.' and board[7][6] == '.'
+                if end[1] == 2 and 'Q' in castling_fen: 
+                    return board[7][1] == '.' and board[7][2] == '.' and board[7][3] == '.'
+                    
+
+            elif piece == 'k' and start == (0, 4):
+                if end[1] == 6 and 'k' in castling_fen: 
+                    return board[0][5] == '.' and board[0][6] == '.'
+                if end[1] == 2 and 'q' in castling_fen: 
+                    return board[0][1] == '.' and board[0][2] == '.' and board[0][3] == '.'
+                    
+        return False
+
+
+    @staticmethod
+    def is_promotion_valid(move: str, piece_char: str, move_end: tuple[int, int]) -> bool:
+        if piece_char.lower() == 'p':
+            is_promotion_rank = (move_end[0] == 0) or (move_end[0] == 7)
+            has_promotion_char = len(move) == 5
+            
+            if is_promotion_rank and not has_promotion_char:
+                return False  
+            if not is_promotion_rank and has_promotion_char:
+                return False 
+                
+        elif len(move) == 5:
+            return False  
+            
+        return True
+
+
+    @staticmethod
+    def is_square_attacked(board: list[list[str]], target_square: tuple[int, int], attacker_turn: str) -> bool:
+        target_row, target_col = target_square
+
+        for row in range(8):
+            for col in range(8):
+                piece = board[row][col]
+                if piece == '.':
+                    continue
+                
+                is_white_piece = piece.isupper()
+                if (attacker_turn == 'w' and not is_white_piece) or (attacker_turn == 'b' and is_white_piece):
+                    continue
+                
+                piece_type = piece.lower()
+                start = (row, col)
+                
+                if piece_type == 'p':
+                    if attacker_turn == 'w':
+                        direction = -1
+                    else:
+                        direction = 1
+                    if target_row == row + direction and abs(target_col - col) == 1:
+                        return True
+                        
+                elif piece_type == 'n':
+                    if MoveService.is_knight_move_valid(piece, start, target_square, board):
+                        return True
+                        
+                elif piece_type == 'r':
+                    if MoveService.is_rook_move_valid(piece, start, target_square, board):
+                        return True
+                        
+                elif piece_type == 'b':
+                    if MoveService.is_bishop_move_valid(piece, start, target_square, board):
+                        return True
+                        
+                elif piece_type == 'q':
+                    if MoveService.is_queen_move_valid(piece, start, target_square, board):
+                        return True
+                        
+                elif piece_type == 'k':
+                    if abs(row - target_row) <= 1 and abs(col - target_col) <= 1:
+                        return True
+                        
+        return False
+    
+
+    @staticmethod
+    def is_king_safe_after_move(board: list[list[str]], move_start: tuple[int, int], move_end: tuple[int, int], piece_char: str, turn: str) -> bool:
+        enemy_turn = 'b' if turn == 'w' else 'w'
+
+        if piece_char.lower() == 'k' and abs(move_start[1] - move_end[1]) == 2:
+            if MoveService.is_square_attacked(board, move_start, enemy_turn):
+                return False 
+            
+            pass_col = (move_start[1] + move_end[1]) // 2
+            if MoveService.is_square_attacked(board, (move_start[0], pass_col), enemy_turn):
+                return False 
+
+        temp_board = [row[:] for row in board] 
+        temp_board[move_end[0]][move_end[1]] = piece_char
+        temp_board[move_start[0]][move_start[1]] = '.'
+        
+        king_char = 'K' if turn == 'w' else 'k'
+        king_pos = None
+        for r in range(8):
+            for c in range(8):
+                if temp_board[r][c] == king_char:
+                    king_pos = (r, c)
+                    break
+            if king_pos: 
+                break
+                
+        if king_pos and MoveService.is_square_attacked(temp_board, king_pos, enemy_turn):
+            return False
+
+        return True
