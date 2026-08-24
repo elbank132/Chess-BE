@@ -10,7 +10,9 @@ from app.services.move_service import MoveService
 
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*'
+    cors_allowed_origins='*',
+    ping_interval=25,
+    ping_timeout=120
 )
 
 class EventArguments(StrEnum):
